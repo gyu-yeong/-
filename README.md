@@ -1,3 +1,4 @@
-# 2022년 스터디 - 트랜스퍼마크트 축구선수 데이터 크롤링 연습
+# 스터디 기록 2021 ~ ING (STUDY RECORD)
 
-### 1. 
+### 1. 2022 트랜스퍼마켓 축구선수 데이터 크롤링
+### 1. 2022 TRANFERMARKET FOOTBALL PLAYER DATA CRAWLING
