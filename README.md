@@ -1,7 +1,7 @@
 # STUDY RECORD 2021 ~ ING (STUDY RECORD)
 
-### 1. 2022 트랜스퍼마켓 축구선수 데이터 크롤링
-#### (1. 2022 TRANFERMARKET FOOTBALL PLAYER DATA CRAWLING)
+### 1. 크롤링 공부
 
-### 2. 2022 밀양시청내 음식점 정보 크롤링
-#### (2. Crawling restaurant information in Miryang City Hall)
+- 개요: BeautifulSoup, Selenium을 활용한 크롤링 연습
+- 내용: 트랜스퍼마크, 밀양시청 맛집 리스트, 쿠팡 등 크롤링
+
