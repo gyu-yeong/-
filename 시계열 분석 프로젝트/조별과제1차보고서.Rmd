@@ -1,0 +1,388 @@
+---
+title: "20대 남녀 취업자 추세 분석을 이용한 예측 (1차 보고서)"
+output:
+  html_document: default
+  pdf_document: default
+date: "2023-05-08"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## 1. 개요
+
+#### (1) 분석 목적 
+
+- 20대 남녀 취업자 추세 분석
+- 본 프로젝트는 KOSIS에서 제공하는 성/연령별 취업자 수 데이터로 2005년 1월부터 2022년 12월까지의 20대 남/녀 취업자 수 활용해 시계열 분석을 하고자 한다. 
+- 본 1차 보고서는 평활법, 분해법을 활용해 로우 데이터 상태에서 탐색적 분석을 목적으로 한다. 
+
+#### (2) 시계열 자료 설명 
+
+- 데이터 출처: KOSIS 제공한 성/연령별 취업자 데이터
+- 활용 데이터 개요:  2005년 1월 ~ 2022년 12월까지의 시점. 컬럼은 취업자 수 (단위 천 명), 시점 (월별)으로 구성된 남녀 각각의 일변량 데이터로 두 데이터 모두 216행 2열로 구성되어 있다.
+- 사용할 데이터프레임 형태는 아래 그림과 같다.
+(참고: 아래 데이터프레임은 남성과 여성을 분리하기 이전의 데이터)
+
+```{r cars}
+library(readxl)
+library(forecast)
+library(TTR)
+library(tseries)
+
+wm = read_excel("C:/박규영/4학년_1학기/시계열/조별과제/과제데이터.xlsx")
+wm <- head(wm, n = nrow(wm) - 3) # 2005년 1월 ~ 2022년 12월까지 고려하기 위해
+man = ts(data=wm[,2], frequency=12, start=c(2005,1))
+woman = ts(data=wm[,3], frequency=12, start=c(2005,1))
+max_w <- max(woman)
+head(wm)
+```
+
+#### (3) 시계열 자료 특징
+
+- 기술통계량 요약
+- 남성의 경우, 표본평균은 1806이다.
+- 여성의 경우, 표본평균은 1959이다.
+
+```{r}
+summary(man)
+```
+
+```{r}
+summary(woman)
+```
+
+
+- 남녀 20대 취업자 추세를 살펴보면 여성이 남성에 비해 더 높은 취업자 수를 기록하고 있다. 남녀 모두 2005년부터 2015년까지 감소하다가 2015년 후반기부터 2019년까지 소폭 상승하는 추세를 기록하고 있다. 이후, 코로나(2019~2020년) 기간동안 대폭 감소하다가 2022년 들어서 재상승하는 경향을 파악할 수 있다.
+- 또한, 남녀 취업자 추세 모두 평균과 분산이 일정하지 않음을 사전에 파악할 수 있다.
+
+```{r}
+plot(man, col="blue", main="남녀 20대 취업자 추세", ylab='Count', ylim=c(1500, max_w))
+lines(woman, col="red")
+legend("topright", legend=c("남성", "여성"), col=c("blue", "red"), lty=1)
+```
+
+## 2. 추세 분석
+
+- 추세분석을 사용하여 전체적인 시계열의 특징들을 파악할 수 있다. 
+- 특히 그중에서도 추세분석에서 가장 많이 사용하는 회귀분석 기법을 이용하여 데이터의 추세 및 가장 적합한 회귀 모형이 무엇인지에 대하여 분석해보고자 한다.
+
+#### (1) 회귀를 이용한 추세 분석 (남성)
+
+- 시계열 그래프 개형을 살펴봤을 때, 직선적인 추세를 띠고 있지 않아서 2차 회귀분석부터 4차, 그리고 3차 회귀에 로그변환을 적용한 모형까지 고려해보았다. 
+
+
+```{r}
+tt = 1:length(man) # 설명변수
+reg1 = lm(man~tt+I(tt^2))
+reg2 = lm(man~tt+I(tt^2)+I(tt^3))
+reg3 = lm(man~tt+I(tt^2)+I(tt^3)+I(tt^4))
+
+plot(tt, man, main='2, 3, 4차 회귀분석 결과',type="l") 
+lines(reg1$fitted.values, col="blue") 
+lines(reg2$fitted.values, col="red") 
+lines(reg3$fitted.values, col="green")
+legend("topright", legend=c("2차 회귀", "3차 회귀", "4차 회귀"), col=c("blue", "red", "green"), lty=1)
+```
+
+- 회귀모형의 유의성검정
+- 2차, 3차, 4차 다항회귀분석에 대하여 추세분석을 진행한 후 각각 독립변수들이 유의한 결과가 나오는지를 확인하기 위해 유의성 검정을 실시하였다.
+- 유의수준 0.05하에서 2차, 3차 회귀분석은 모든 변수들이 유의한 결과가 나오는 것을 확인할 수 있지만 4차 회귀분석에서는 이차항 독립변수가 유의하지 않은 결과가 나오는 것을 확인할 수 있다.
+- 따라서 해당 데이터에 대해서는 3차 모형까지가 적합한 모형으로 판단한 후 3차모형에 로그변환을 한 것까지 같이 비교해 보았다.
+
+```{r}
+sreg1 = summary(reg1) # 2차
+sreg2 = summary(reg2) # 3차
+sreg3 = summary(reg3) # 4차 
+
+print(sreg1$coefficients)
+print(sreg2$coefficients)
+print(sreg3$coefficients)
+```
+
+- 3차 회귀모형에 로그변환을 실시한 모형 
+
+```{r}
+reg4 = lm(log(man)~tt+I(tt^2)+I(tt^3))
+
+plot(tt, man, main='로그 변환을 실시한 회귀', type="l")
+lines(exp(reg4$fitted.values), col="red")
+```
+
+- 잔차제곱합을 이용한 모형 비교
+- sse의 크기를 비교한 결과, 3차 회귀분석이 가장 적절한 것으로 판단된다. 
+
+```{r}
+sse1 = sum(reg1$residuals^2) # reg1의 잔차제곱합
+sse2 = sum(reg2$residuals^2) # reg2의 잔차제곱합
+sse3 = sum((man-exp(reg4$fitted.values))^2) # reg4의 잔차제곱합
+c(sse1, sse2, sse3) 
+```
+
+- 예측오차로 모형비교
+- 2005년 1월부터 2020년 12월을 train데이터, 2021년 1월부터 2022년 12월을 test데이터로 두어 test데이터에 대한 예측오차 비교해보았다. 
+- 잔차제곱합으로 비교하면 3차 모형이 더욱 적합해 보였으나, 예측오차로 비교해보니 2차 모형만 사용하는 것이 더욱 효율적이라는 결과 도출할 수 있다. 
+
+```{r}
+train_data = window(man, start=c(2005,1), end=c(2020,12))
+test_data = window(man, start=c(2021,1), end=c(2022,12))
+
+# 2차 회귀분석
+regA = lm(man~tt+I(tt^2))
+predA = as.data.frame(test_data) - predict(regA, newdata =test_data) # A모형을 사용했을 때 test 데이터에 대한 예측오차 계산
+
+# 3차 회귀분석
+regB = lm(man~tt+I(tt^2)+I(tt^3))
+predB = as.data.frame(test_data) - predict(regB, newdata =test_data) # B모형을 사용했을 때 test 데이터에 대한 예측오차 계산
+
+# 로그변환(3차 회귀분석)
+regC = lm(log(man)~tt+I(tt^2)+I(tt^3))
+predC = as.data.frame(test_data) - exp(predict(regC, newdata =test_data)) # C모형을 사용했을 때 test 데이터에 대한 예측오차 계산
+```
+
+```{r}
+# 모형 비교
+pred.err = cbind(predA, predB, predC)
+acc = colMeans(pred.err^2)
+acc
+```
+
+- 2차 모형한 모형과 로그변환한 2차 모형에 대한 예측오차 비교
+- 로그변환 한 것보다 그냥 2차모형만 사용한 것이 예측오차가 더 작은 것으로 확인가능하다.
+- 따라서 20대 남성에 대해서는 주어진 모형을 어느정도 잘 설명하고 있고, 예측 또한 매우 우수한 2차 모형을 사용하는 것이 가장 좋은 모형이라고 판단 할 수 있음
+
+```{r}
+regD = lm(log(man)~tt+I(tt^2))
+predD = as.data.frame(test_data) - exp(predict(regD, newdata =test_data)) # D모형을 사용했을 때 test 데이터에 대한 예측오차 계산
+
+pred.err = cbind(predA, predD)
+bdd = colMeans(pred.err^2)
+bdd
+```
+
+#### (2) 회귀를 이용한 추세 분석 (여성)
+
+- 남성과 마찬가지로 시계열 그래프 개형을 살펴봤을 때, 직선적인 추세를 띠고 있지 않아서 2차 회귀분석부터 4차, 그리고 3차 회귀에 로그변환을 적용한 모형까지 고려해보았다. 
+
+```{r}
+tt = 1:length(woman) # 설명변수
+reg1 = lm(woman~tt+I(tt^2))
+reg2 = lm(woman~tt+I(tt^2)+I(tt^3))
+reg3 = lm(woman~tt+I(tt^2)+I(tt^3)+I(tt^4))
+
+plot(tt, woman, main='2,3,4차 회귀분석 결과', type="l")
+lines(reg1$fitted.values, col="blue")
+lines(reg2$fitted.values, col="red") 
+lines(reg3$fitted.values, col="green") 
+legend("topright", legend=c("2차 회귀", "3차 회귀", "4차 회귀"), col=c("blue", "red", "green"), lty=1)
+```
+
+- 회귀모형의 유의성검정  
+- 남성과 마찬가지로 여성 역시 2차, 3차, 4차 다항회귀분석에 대하여 추세분석을 진행한 후 각각 독립변수들이 유의한 결과가 나오는지를 확인하기 위해 유의성 검정을 실시하였다.
+- 유의수준 0.05하에서 2차, 3차 회귀분석은 모든 변수들이 유의한 결과가 나오는 것을 확인할 수 있지만 4차 회귀분석에서는 이차항 독립변수가 유의하지 않은 결과가 나오는 것을 확인할 수 있다.
+- 따라서 해당 데이터에 대해서는 3차 모형까지가 적합한 모형으로 판단한 후 3차모형에 로그변환을 한 것까지 같이 비교해 보았다.
+
+```{r}
+sreg1 = summary(reg1) # 2차
+sreg2 = summary(reg2) # 3차
+sreg3 = summary(reg3) # 4차 
+
+print(sreg1$coefficients)
+print(sreg2$coefficients)
+print(sreg3$coefficients)
+```
+
+- 3차 회귀모형에 로그변환을 적용한 모형 
+
+```{r}
+reg4 = lm(log(woman)~tt+I(tt^2)+I(tt^3))
+plot(tt, woman, main='로그 변환을 실시한 회귀', type="l")
+lines(exp(reg4$fitted.values), col="red")
+```
+
+- 잔차제곱합을 이용한 모형 비교
+- sse의 크기를 비교한 결과, 3차 회귀분석이 가장 적절한 것으로 판단된다. 
+
+```{r}
+sse1 = sum(reg1$residuals^2) # reg1의 잔차제곱합
+sse2 = sum(reg2$residuals^2) # reg2의 잔차제곱합
+sse3 = sum((woman-exp(reg4$fitted.values))^2) # reg4의 잔차제곱합
+c(sse1, sse2, sse3)
+```
+
+- 예측오차로 모형비교
+- 남성과 마찬가지로 2005년 1월부터 2020년 12월을 train데이터, 2021년 1월부터 2022년 12월을 test데이터로 두어 test데이터에 대한 예측오차 비교해보았다. 
+- 남성과 동일하게 잔차제곱합으로 비교하면 3차 모형이 더욱 적합해 보였으나, 예측오차로 비교해보니 2차 모형만 사용하는 것이 더욱 효율적이라는 결과 도출할 수 있다.
+
+```{r}
+train_data = window(woman, start=c(2005,1), end=c(2020,12))
+test_data = window(woman, start=c(2021,1), end=c(2022,12))
+
+# 2차 회귀분석
+regA = lm(woman~tt+I(tt^2))
+predA = as.data.frame(test_data) - predict(regA, newdata =test_data) # A모형을 사용했을 때 test 데이터에 대한 예측오차 계산
+
+# 3차 회귀분석
+regB = lm(woman~tt+I(tt^2)+I(tt^3))
+predB = as.data.frame(test_data) - predict(regB, newdata =test_data) # B모형을 사용했을 때 test 데이터에 대한 예측오차 계산
+
+# 로그변환(3차 회귀분석)
+regC = lm(log(woman)~tt+I(tt^2)+I(tt^3))
+predC = as.data.frame(test_data) - exp(predict(regC, newdata =test_data)) # C모형을 사용했을 때 test 데이터에 대한 예측오차 계산
+
+
+# 모형 비교
+pred.err = cbind(predA, predB, predC)
+acc = colMeans(pred.err^2)
+acc
+```
+
+- 2차 모형과 로그변환한 2차모형에 대한 예측오차 비교
+- 로그변환 한 것보다 그냥 2차모형만 사용한 것이 예측오차가 더 작은 것으로 확인가능하다. 
+- 따라서 20대 여성에 대해서도 마찬가지로 주어진 모형을 어느정도 잘 설명하고 있고, 예측 또한 매우 우수한 2차 모형을 사용하는 것이 가장 좋은 모형이라고 판단 할 수 있다. 
+
+```{r}
+regD = lm(log(woman)~tt+I(tt^2))
+predD = as.data.frame(test_data) - exp(predict(regD, newdata =test_data)) # D모형을 사용했을 때 test 데이터에 대한 예측오차 계산
+
+pred.err = cbind(predA, predD)
+bdd = colMeans(pred.err^2)
+bdd
+```
+
+## 3. 평활법 
+
+#### (1) 평활법 목적
+
+- 평활법은 데이터의 추세를 파악하기 위한 방법 중 하나로써 본 1차 보고서에서는 원본 데이터에 평활법을 적용하여 대략적인 추체를 파악하는 것을 목적으로 한다.
+- 이동평균법, 지수평활법, 국소회귀를 활용해 평활법을 적용해 가장 적합한 기법을 탐색하고자 한다.
+
+#### (2) 이동평균법
+
+(2-1) 단순이동평균법을 활용한 이동평균법
+
+```{r}
+man_ma <- ma(man,order=12,centre=TRUE) # 중심화 이동평균
+man_ma_nocenter <- ma(man,order=12,centre=FALSE)
+woman_ma <- ma(woman,order=12,centre=TRUE) # 중심화 이동평균
+woman_ma_nocenter <- ma(woman,order=12,centre=FALSE)
+```
+
+```{r}
+plot(man, main="중심화 이동평균", col="blue", ylab='Count', ylim=c(1500, max(woman)))
+lines(woman, col="red")
+lines(man_ma,col="blue")
+lines(woman_ma,col="red")
+legend("topright", legend=c("남성", "여성"), col=c("blue", "red"), lty=1)
+```
+
+```{r}
+plot(man, main="단순이동평균(중심화x)", col="blue", ylab='Count', ylim=c(1500, max(woman)))
+lines(woman, col="red")
+lines(man_ma_nocenter, col='blue')
+lines(woman_ma_nocenter, col='red')
+legend("topright", legend=c("남성", "여성"), col=c("blue", "red"), lty=1)
+```
+
+(2-2) 이중이동평균법을 활용한 이동평균법
+
+```{r}
+
+dma <- function(x, n){ # 이중 이동평균 함수 정의
+  ma <- ma(x,order=12,centre=TRUE)
+  dma <- filter(ma, rep(1/n, n), sides=2)
+  return(dma)
+}
+
+smoothed_man <- dma(man, 12)
+smoothed_woman <- dma(woman, 12)
+```
+
+```{r}
+plot(man,main="이중이동평균법",col='blue', ylim=c(1500, max(woman)))
+lines(smoothed_man,col='blue')
+lines(woman,col='red')
+lines(smoothed_woman, col="red")
+legend("topright", legend=c("남성", "여성"), col=c("blue", "red"), lty=1)
+```
+
+- 단순이동평균법, 이중이동평균법을 적용했을 때 모두 적절하게 평활이 된 것을 확인할 수 있다.
+
+#### (3) 지수평활법 
+
+- 지수평활법에는 단순지수평활, 선형지수평활, 계절지수평활이 존재하나 본 보고서에서는 예측이 아닌 추세파악을 하는 것이 목적이므로 단순지수평활만을 이용해 그 결과를 시각화해보았다.
+
+(3-1) 단순지수평활법
+
+- 평활상수 alpha는 0.1부터 0.9까지 시행해본 결과, 0.2일 때 평활이 가장 잘된 것을 볼 수 있었다.
+- alpha=0.2로 지정하여 단순지수평활법을 실행한 그래프는 다음과 같다. 
+
+```{r}
+plot(HoltWinters(man,alpha=0.2,beta=FALSE,gamma=FALSE))
+```
+
+(4) 국소회귀
+
+- 국소회귀를 활용해 남녀 각각 평활했을 때, 대체적으로 추세를 대표하는 것으로 판단할 수 있다.
+- 하지만 국소회귀는 미래 시점에 대한 예측이 불가능하다.
+
+```{r}
+man_lowess <- lowess(man,f=2/3)
+woman_lowess <- lowess(woman,f=2/3)
+
+plot(man, col="blue", ylab='Count', ylim=c(1500, max(woman)))
+lines(woman, col="red")
+lines(man_lowess,col='blue')
+lines(woman_lowess,col='red')
+legend("topright", legend=c("남성", "여성"), col=c("blue", "red"), lty=1)
+```
+
+## 4. 분해법 
+
+- 해당 시계열 데이터를 분해하기 앞서, 시계열 데이터를 구성하는 성분은 추세,계절,불규칙 성분만을 고려한다.
+- 남녀 관측치들을 시계열 그림으로 확인해본 결과, 시점에 따른 데이터의 진폭이 일정하지 않기에 남녀 데이터 모두 각 성분의 결합방식이 승법모형이라고 가정하고 분해를 진행하고자 한다.
+
+```{r}
+dec.m <- decompose(man,type="multiplicative")
+dec.w <- decompose(woman,type="multiplicative")
+```
+
+- 시계열 그림을 통해 확인해본 결과, 데이터의 패턴 파악이 어려우므로 남녀 데이터 모두 추세모형을 이용한 추세성분 추정 보다는 중심화 이동평균을 이용하여 추세성분 추정하였다. (이동평균기간은 주기의 최소배수)
+
+```{r}
+head(dec.m$trend, 10)
+```
+
+```{r}
+head(dec.w$trend, 10)
+```
+
+- 추세조정된 시계열 데이터를 바탕으로, 계절성분 추정. 두 데이터의 추정된 계절성분의 값을 확인해보면, 성별간 취업자 데이터의 계절성분 값은 크게 차이나지 않는다.  
+- 위에서 추정된 추세성분과 계절성분을 조정하여 불규칙성분 추정할 수 있다.
+
+```{r}
+head(dec.m$seasonal,10)
+```
+
+```{r}
+head(dec.w$seasonal,10)
+```
+
+- 남녀 시계열 데이터에 대한 각각의 분해법 진행 결과
+
+```{r}
+plot(dec.m)
+```
+
+```{r}
+plot(dec.w)
+```
+
+## 5. 결론 및 요약 
+
+- 1차 보고서는 ARIMA 모형 적합을 위한 데이터의 탐색과 근거를 찾는 것을 목적으로 하고 있다.
+- 두 시계열 데이터 모두 2차 회귀모형을 적합하였을 때, 추세를 잘 설명하고 예측 또한 잘할 수 있을 것이라고 판단된다.  
+- 여러 기법을 활용해 평활한 결과, 이동평균법이 가장 합리적으로 평활된 모습을 확인할 수 있다. 
+- 원본 데이터에 분해법을 적용한 결과를 확인해보았는데, 추후 정상화 변형된 모형과의 비교를 해볼 필요가 있을 것으로 판단된다. 
+- 남성과 여성 모두 시계열 그래프를 파악한 결과, 비정상성을 띤다고 판단하였지만 추후 단위근 검정을 이용하여 차분이 필요한 비정상시계열 여부를 명확하게 파악할 예정이다.
+
